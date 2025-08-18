@@ -356,11 +356,25 @@ async def health():
 
 # Mount static files for frontend (only in production)
 try:
-    if os.path.exists("frontend/dist"):
-        app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
-        print("✅ Static files mounted successfully")
-    else:
+    # Check multiple possible locations for frontend build
+    frontend_paths = [
+        "dist",           # Docker build location
+        "frontend/dist",  # Local development
+        "../frontend/dist" # Alternative location
+    ]
+    
+    frontend_mounted = False
+    for frontend_path in frontend_paths:
+        if os.path.exists(frontend_path):
+            app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
+            print(f"✅ Static files mounted successfully from: {frontend_path}")
+            frontend_mounted = True
+            break
+    
+    if not frontend_mounted:
         print("⚠️ Frontend dist directory not found - API only mode")
+        print(f"📂 Available directories: {os.listdir('.')}")
+        
 except Exception as e:
     print(f"⚠️ Could not mount static files: {e}")
 

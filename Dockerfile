@@ -1,4 +1,22 @@
-# Use Python 3.11 slim image for smaller size
+# Multi-stage build for full-stack application
+FROM node:18-alpine AS frontend-builder
+
+# Set working directory for frontend
+WORKDIR /app/frontend
+
+# Copy frontend package files
+COPY frontend/package*.json ./
+
+# Install frontend dependencies
+RUN npm ci --only=production
+
+# Copy frontend source code
+COPY frontend/ ./
+
+# Build frontend
+RUN npm run build
+
+# Python backend stage
 FROM python:3.11-slim
 
 # Set environment variables
@@ -10,7 +28,7 @@ ENV PYTHONPATH=/app
 ENV PYTHONMALLOC=malloc
 ENV PYTHONDEVMODE=0
 
-# Install system dependencies
+# Install system dependencies including curl for health checks
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -27,8 +45,11 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy backend application code
 COPY backend/ .
+
+# Copy built frontend from frontend-builder stage
+COPY --from=frontend-builder /app/frontend/dist ./dist
 
 # Create a non-root user
 RUN useradd --create-home --shell /bin/bash app && \
@@ -38,7 +59,7 @@ USER app
 # Expose port
 EXPOSE 8000
 
-# Health check using curl instead of requests
+# Health check using curl (ensure curl is available)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
