@@ -41,7 +41,8 @@ logs/
 
 # Model files (ignore all model files - will handle separately for deployment)
 *.pt
-*.pth
+# Allow specific model files for deployment
+!sneaker_model_production.pth
 
 # Temporary files
 *.tmp
