@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Shield } from 'lucide-react';
 
 const Header: React.FC = () => {
   const scrollToSection = (sectionId: string) => {
@@ -19,11 +18,11 @@ const Header: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-sky-100 rounded-lg">
-              <Shield className="h-6 w-6 text-sky-600" />
+              <img src="/sneakers-icon.png" alt="LegitKicks" className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">SneakerAuth</h1>
-              <p className="text-sm text-gray-600">AI-Powered Authentication</p>
+                      <h1 className="text-xl font-bold text-gray-900">LegitKicks</h1>
+        <p className="text-sm text-gray-600">AI-Powered Authentication</p>
             </div>
           </div>
           

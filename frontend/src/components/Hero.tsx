@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Zap, Eye, CheckCircle, ArrowDown } from 'lucide-react';
+import { Zap, Eye, CheckCircle, ArrowDown } from 'lucide-react';
 
 const Hero: React.FC = () => {
   const scrollToUpload = () => {
@@ -22,9 +22,9 @@ const Hero: React.FC = () => {
           >
             <div className="inline-flex items-center space-x-3 mb-6">
               <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
-                <Shield className="h-10 w-10 text-white" />
+                <img src="/sneakers-icon.png" alt="LegitKicks" className="h-10 w-10" />
               </div>
-              <h1 className="text-5xl md:text-7xl font-bold">SneakerAuth</h1>
+              <h1 className="text-5xl md:text-7xl font-bold">LegitKicks</h1>
             </div>
             
             <p className="text-xl md:text-2xl mb-8 text-white/90 max-w-3xl mx-auto leading-relaxed">
@@ -70,7 +70,7 @@ const Hero: React.FC = () => {
             className="text-center mb-16"
           >
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              How SneakerAuth Works
+              How LegitKicks Works
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Our specialized AI model analyzes Nike Jordan 1 and Nike Air Force 1 sneakers, 

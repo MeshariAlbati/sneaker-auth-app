@@ -23,8 +23,8 @@ WORKDIR /app
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Model file will be handled by the app.py fallback logic
-# No need to copy it here since it's not in the Git repository
+# Copy the model file from the repository (now handled by Git LFS)
+COPY sneaker_model_production.pth ./
 
 # Copy backend code
 COPY backend/ ./backend/

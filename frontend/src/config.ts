@@ -1,7 +1,7 @@
 const config = {
   apiUrl: import.meta.env.PROD 
     ? 'https://legitkicks.onrender.com/api'  // Your actual Render URL
-    : 'http://localhost:8000',  // Development: API on localhost:8000
+    : 'http://localhost:8000/api',  // Development: API on localhost:8000/api
 };
 
 export default config;

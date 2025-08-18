@@ -19,6 +19,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Local development
+        "http://localhost:3001",  # Local development alternative
+        "http://localhost:3002",  # Local development alternative
+        "http://localhost:5173",  # Local development alternative
+        "http://localhost:5174",  # Local development alternative
         "http://localhost:8000",  # Local backend
         "https://legitkicks.onrender.com",  # Your actual Render frontend URL
         "*"  # Allow all origins for now (you can restrict this later)
@@ -34,51 +38,20 @@ class ModelLoader:
         self.model = self.load_model()
         self.transform = self.get_transform()
         
-    def download_model_if_needed(self):
-        """Download model from Google Drive if not present and URL is provided"""
-        model_path = 'sneaker_model_production.pth'
-        model_url = os.getenv('MODEL_DOWNLOAD_URL')
+    def check_model_file(self):
+        """Check if model file exists"""
+        # Check both possible model file locations
+        model_paths = ['sneaker_model_production.pth', '../sneaker_model_production.pth']
         
-        print(f"🔍 Checking for model file: {model_path}")
-        print(f"🔗 Model URL from env: {model_url}")
+        for model_path in model_paths:
+            if os.path.exists(model_path):
+                print(f"✅ Model file found: {model_path}")
+                return model_path
+            else:
+                print(f"🔍 Checking: {model_path} - not found")
         
-        if not os.path.exists(model_path) and model_url:
-            print("📥 Downloading model file from cloud storage...")
-            try:
-                # Handle Google Drive URLs
-                if 'drive.google.com' in model_url:
-                    # Extract file ID and convert to direct download URL
-                    if '/file/d/' in model_url:
-                        file_id = model_url.split('/file/d/')[1].split('/')[0]
-                        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                    else:
-                        download_url = model_url
-                else:
-                    download_url = model_url
-                
-                print(f"📥 Downloading from: {download_url}")
-                
-                # Download the file
-                response = requests.get(download_url, stream=True, timeout=300)
-                response.raise_for_status()
-                
-                with open(model_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                
-                print("✅ Model file downloaded successfully")
-                return True
-                
-            except Exception as e:
-                print(f"❌ Failed to download model: {e}")
-                return False
-        elif os.path.exists(model_path):
-            print(f"✅ Model file already exists: {model_path}")
-            return True
-        else:
-            print("⚠️ No model file found and no download URL provided")
-            return False
+        print("⚠️ Model file not found in any expected location")
+        return None
 
     def load_model(self):
         model = models.resnet50(weights=None)
@@ -92,21 +65,18 @@ class ModelLoader:
             nn.Linear(512, 2)
         )
         
-        # Try to download model if needed
-        model_downloaded = self.download_model_if_needed()
+        # Check if model file exists and get the correct path
+        model_path = self.check_model_file()
         
-        # Load weights - with fallback for deployment
-        model_path = 'sneaker_model_production.pth'
-        
-        if os.path.exists(model_path):
+        if model_path:
             # Production model available
             checkpoint = torch.load(model_path, map_location=self.device)
             model.load_state_dict(checkpoint['model_state_dict'])
-            print("✅ Loaded production model")
+            print(f"✅ Loaded production model from: {model_path}")
         else:
             # Fallback: Initialize with random weights for demo
             print("⚠️ Using demo mode - model file not found")
-            print("📝 Note: Add MODEL_DOWNLOAD_URL environment variable with model file URL")
+            print("📝 Note: Model file should be included in the repository")
         
         model.to(self.device)
         model.eval()
@@ -212,19 +182,28 @@ async def predict(file: UploadFile = File(...)):
 @app.get("/api/health")
 async def health():
     model_status = "unknown"
-    model_path = 'sneaker_model_production.pth'
+    # Check both possible model file locations
+    model_paths = ['sneaker_model_production.pth', '../sneaker_model_production.pth']
+    model_found = False
+    actual_path = ""
     
-    if os.path.exists(model_path):
-        file_size = os.path.getsize(model_path)
-        model_status = f"loaded ({file_size / (1024*1024):.1f} MB)"
-    else:
+    for model_path in model_paths:
+        if os.path.exists(model_path):
+            file_size = os.path.getsize(model_path)
+            model_status = f"loaded ({file_size / (1024*1024):.1f} MB)"
+            actual_path = model_path
+            model_found = True
+            break
+    
+    if not model_found:
         model_status = "not found"
+        actual_path = "sneaker_model_production.pth"
     
     return {
         "status": "healthy",
         "model_status": model_status,
-        "model_path": model_path,
-        "model_download_url": os.getenv('MODEL_DOWNLOAD_URL', 'not set'),
+        "model_path": actual_path,
+        "working_directory": os.getcwd(),
         "timestamp": str(datetime.datetime.now())
     }
 
@@ -245,8 +224,13 @@ if __name__ == "__main__":
     print("🚀 Starting Sneaker Authentication API...")
     print(f"📁 Current working directory: {os.getcwd()}")
     print(f"📂 Files in current directory: {os.listdir('.')}")
+    
+    # Get port from environment variable (Render requirement) or default to 8000
+    port = int(os.getenv('PORT', 8000))
+    print(f"🌐 Binding to port: {port}")
+    
     try:
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host="0.0.0.0", port=port)
     except Exception as e:
         print(f"❌ Failed to start server: {e}")
         raise
