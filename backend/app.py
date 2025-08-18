@@ -11,12 +11,18 @@ import io
 import base64
 import os
 import requests
+import datetime
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "http://localhost:8000",  # Local backend
+        "https://legitkicks.onrender.com",  # Your actual Render frontend URL
+        "*"  # Allow all origins for now (you can restrict this later)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +39,9 @@ class ModelLoader:
         model_path = 'sneaker_model_production.pth'
         model_url = os.getenv('MODEL_DOWNLOAD_URL')
         
+        print(f"🔍 Checking for model file: {model_path}")
+        print(f"🔗 Model URL from env: {model_url}")
+        
         if not os.path.exists(model_path) and model_url:
             print("📥 Downloading model file from cloud storage...")
             try:
@@ -46,6 +55,8 @@ class ModelLoader:
                         download_url = model_url
                 else:
                     download_url = model_url
+                
+                print(f"📥 Downloading from: {download_url}")
                 
                 # Download the file
                 response = requests.get(download_url, stream=True, timeout=300)
@@ -62,8 +73,12 @@ class ModelLoader:
             except Exception as e:
                 print(f"❌ Failed to download model: {e}")
                 return False
-        
-        return os.path.exists(model_path)
+        elif os.path.exists(model_path):
+            print(f"✅ Model file already exists: {model_path}")
+            return True
+        else:
+            print("⚠️ No model file found and no download URL provided")
+            return False
 
     def load_model(self):
         model = models.resnet50(weights=None)
@@ -152,24 +167,66 @@ except Exception as e:
 @app.post("/api/predict")
 async def predict(file: UploadFile = File(...)):
     try:
+        # Validate file type
+        if not file.content_type.startswith('image/'):
+            return JSONResponse(
+                content={'error': 'File must be an image'},
+                status_code=400
+            )
+        
         # Read image
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents)).convert('RGB')
+        
+        if not contents:
+            return JSONResponse(
+                content={'error': 'Empty file received'},
+                status_code=400
+            )
+        
+        try:
+            image = Image.open(io.BytesIO(contents)).convert('RGB')
+        except Exception as img_error:
+            return JSONResponse(
+                content={'error': f'Invalid image format: {str(img_error)}'},
+                status_code=400
+            )
         
         # Get prediction
-        result = model_loader.predict(image)
-        
-        return JSONResponse(content=result)
+        try:
+            result = model_loader.predict(image)
+            return JSONResponse(content=result)
+        except Exception as pred_error:
+            print(f"Prediction error: {pred_error}")
+            return JSONResponse(
+                content={'error': f'Model prediction failed: {str(pred_error)}'},
+                status_code=500
+            )
     
     except Exception as e:
+        print(f"Unexpected error in predict endpoint: {e}")
         return JSONResponse(
-            content={'error': str(e)},
+            content={'error': f'Server error: {str(e)}'},
             status_code=500
         )
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy"}
+    model_status = "unknown"
+    model_path = 'sneaker_model_production.pth'
+    
+    if os.path.exists(model_path):
+        file_size = os.path.getsize(model_path)
+        model_status = f"loaded ({file_size / (1024*1024):.1f} MB)"
+    else:
+        model_status = "not found"
+    
+    return {
+        "status": "healthy",
+        "model_status": model_status,
+        "model_path": model_path,
+        "model_download_url": os.getenv('MODEL_DOWNLOAD_URL', 'not set'),
+        "timestamp": str(datetime.datetime.now())
+    }
 
 # Mount static files for frontend (only in production)
 try:
