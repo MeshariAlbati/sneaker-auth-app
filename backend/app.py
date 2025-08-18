@@ -10,6 +10,7 @@ from PIL import Image
 import io
 import base64
 import os
+import requests
 
 app = FastAPI()
 
@@ -27,6 +28,42 @@ class ModelLoader:
         self.model = self.load_model()
         self.transform = self.get_transform()
         
+    def download_model_if_needed(self):
+        """Download model from Google Drive if not present and URL is provided"""
+        model_path = 'sneaker_model_production.pth'
+        model_url = os.getenv('MODEL_DOWNLOAD_URL')
+        
+        if not os.path.exists(model_path) and model_url:
+            print("📥 Downloading model file from cloud storage...")
+            try:
+                # Handle Google Drive URLs
+                if 'drive.google.com' in model_url:
+                    # Extract file ID and convert to direct download URL
+                    if '/file/d/' in model_url:
+                        file_id = model_url.split('/file/d/')[1].split('/')[0]
+                        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                    else:
+                        download_url = model_url
+                else:
+                    download_url = model_url
+                
+                # Download the file
+                response = requests.get(download_url, stream=True)
+                response.raise_for_status()
+                
+                with open(model_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                print("✅ Model file downloaded successfully")
+                return True
+                
+            except Exception as e:
+                print(f"❌ Failed to download model: {e}")
+                return False
+        
+        return os.path.exists(model_path)
+
     def load_model(self):
         model = models.resnet50(weights=None)
         num_features = model.fc.in_features
@@ -39,8 +76,11 @@ class ModelLoader:
             nn.Linear(512, 2)
         )
         
+        # Try to download model if needed
+        model_downloaded = self.download_model_if_needed()
+        
         # Load weights - with fallback for deployment
-        model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sneaker_model_production.pth')
+        model_path = 'sneaker_model_production.pth'
         
         if os.path.exists(model_path):
             # Production model available
@@ -50,7 +90,7 @@ class ModelLoader:
         else:
             # Fallback: Initialize with random weights for demo
             print("⚠️ Using demo mode - model file not found")
-            print("📝 Note: Predictions will be random until model is uploaded")
+            print("📝 Note: Add MODEL_DOWNLOAD_URL environment variable with model file URL")
         
         model.to(self.device)
         model.eval()
