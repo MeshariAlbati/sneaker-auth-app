@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import torch
 import torch.nn as nn
@@ -86,7 +87,7 @@ class ModelLoader:
         }
 model_loader = ModelLoader()
 
-@app.post("/predict")
+@app.post("/api/predict")
 async def predict(file: UploadFile = File(...)):
     try:
         # Read image
@@ -104,9 +105,14 @@ async def predict(file: UploadFile = File(...)):
             status_code=500
         )
 
-@app.get("/health")
+@app.get("/api/health")
 async def health():
     return {"status": "healthy"}
+
+# Mount static files for frontend (only in production)
+import os
+if os.path.exists("frontend/dist"):
+    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
 
 # Note: Email functionality now handled client-side via mailto links
 
