@@ -7,8 +7,6 @@ build:
 
 deploy:
   startCommand: python app.py
-  healthcheckPath: /api/health
-  healthcheckTimeout: 300
   restartPolicyType: on_failure
   restartPolicyMaxRetries: 3
 
@@ -35,14 +33,6 @@ railway:
     maxInstances: 3
     targetCPUUtilization: 70
     targetMemoryUtilization: 80
-
-# Health check configuration
-healthcheck:
-  path: /api/health
-  interval: 30s
-  timeout: 10s
-  retries: 3
-  startPeriod: 40s
 
 # Resource allocation
 resources:

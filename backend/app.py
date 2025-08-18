@@ -10,7 +10,6 @@ import base64
 import datetime
 import numpy as np
 from PIL import Image
-import requests
 
 app = FastAPI()
 
