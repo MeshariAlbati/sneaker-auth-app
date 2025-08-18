@@ -38,10 +38,19 @@ class ModelLoader:
             nn.Linear(512, 2)
         )
         
-        # Load weights
+        # Load weights - with fallback for deployment
         model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sneaker_model_production.pth')
-        checkpoint = torch.load(model_path, map_location=self.device)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        
+        if os.path.exists(model_path):
+            # Production model available
+            checkpoint = torch.load(model_path, map_location=self.device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            print("✅ Loaded production model")
+        else:
+            # Fallback: Initialize with random weights for demo
+            print("⚠️ Using demo mode - model file not found")
+            print("📝 Note: Predictions will be random until model is uploaded")
+        
         model.to(self.device)
         model.eval()
         return model
