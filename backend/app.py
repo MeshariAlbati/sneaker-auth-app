@@ -1,6 +1,6 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import gc
@@ -237,27 +237,142 @@ class LightweightModelLoader:
 model_loader = LightweightModelLoader()
 print("✅ Lightweight model loader initialized")
 
+# Mount static files for frontend FIRST (before defining routes)
+try:
+    # Check multiple possible locations for frontend build
+    frontend_paths = [
+        "dist",           # Docker build location
+        "frontend/dist",  # Local development
+        "../frontend/dist" # Alternative location
+    ]
+    
+    frontend_mounted = False
+    for frontend_path in frontend_paths:
+        if os.path.exists(frontend_path):
+            app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
+            print(f"✅ Static files mounted successfully from: {frontend_path}")
+            frontend_mounted = True
+            break
+    
+    if not frontend_mounted:
+        print("⚠️ Frontend dist directory not found - API only mode")
+        print(f"📂 Available directories: {os.listdir('.')}")
+        
+except Exception as e:
+    print(f"⚠️ Could not mount static files: {e}")
+
+# Add catch-all route for SPA routing (must come after static mounting)
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    """Catch-all route for SPA routing - serves frontend for any non-API route"""
+    # Skip API routes
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+    
+    # Skip static assets
+    if full_path.startswith("assets/") or full_path.endswith((".js", ".css", ".png", ".jpg", ".svg")):
+        raise HTTPException(status_code=404, detail="Static asset not found")
+    
+    # For all other routes, serve the frontend (SPA routing)
+    try:
+        frontend_paths = ["dist", "frontend/dist", "../frontend/dist"]
+        for frontend_path in frontend_paths:
+            index_path = os.path.join(frontend_path, "index.html")
+            if os.path.exists(index_path):
+                with open(index_path, 'r') as f:
+                    html_content = f.read()
+                return HTMLResponse(content=html_content, media_type="text/html")
+        
+        # Fallback
+        raise HTTPException(status_code=404, detail="Frontend not available")
+        
+    except Exception as e:
+        print(f"Error in catch-all route: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 @app.get("/")
 async def root():
-    """Root endpoint with API information"""
-    print(f"🌐 Root endpoint accessed - Working directory: {os.getcwd()}")
-    print(f"📂 Files in current directory: {os.listdir('.')}")
+    """Root endpoint serves the frontend application"""
+    print(f"🌐 Root endpoint accessed - Serving frontend from: {os.getcwd()}")
     
-    return {
-        "message": "Sneaker Authentication API",
-        "version": "1.0.0",
-        "status": "running",
-        "endpoints": {
-            "root": "/",
-            "health": "/api/health",
-            "predict": "/api/predict",
-            "docs": "/docs"
-        },
-        "description": "AI-powered sneaker authenticity detection",
-        "memory_optimized": True,
-        "working_directory": os.getcwd(),
-        "timestamp": str(datetime.datetime.now())
-    }
+    # Try to serve the frontend index.html
+    try:
+        # Check if we have frontend files
+        frontend_paths = ["dist", "frontend/dist", "../frontend/dist"]
+        for frontend_path in frontend_paths:
+            index_path = os.path.join(frontend_path, "index.html")
+            if os.path.exists(index_path):
+                with open(index_path, 'r') as f:
+                    html_content = f.read()
+                return HTMLResponse(content=html_content, media_type="text/html")
+        
+        # Fallback: return a simple HTML with API info if no frontend found
+        fallback_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Sneaker Authentication API</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
+                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                h1 {{ color: #2563eb; text-align: center; }}
+                .endpoint {{ background: #f8fafc; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #2563eb; }}
+                .method {{ font-weight: bold; color: #059669; }}
+                .url {{ font-family: monospace; background: #e2e8f0; padding: 2px 6px; border-radius: 3px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🏀 Sneaker Authentication API</h1>
+                <p style="text-align: center; color: #64748b; margin-bottom: 30px;">
+                    AI-powered sneaker authenticity detection service
+                </p>
+                
+                <div class="endpoint">
+                    <div class="method">GET</div>
+                    <div class="url">/api/health</div>
+                    <p>Check API health and model status</p>
+                </div>
+                
+                <div class="endpoint">
+                    <div class="method">POST</div>
+                    <div class="url">/api/predict</div>
+                    <p>Upload an image for sneaker authenticity prediction</p>
+                </div>
+                
+                <div class="endpoint">
+                    <div class="method">GET</div>
+                    <div class="url">/docs</div>
+                    <p>Interactive API documentation</p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px; padding: 20px; background: #f1f5f9; border-radius: 5px;">
+                    <p><strong>Status:</strong> Running</p>
+                    <p><strong>Version:</strong> 1.0.0</strong></p>
+                    <p><strong>Working Directory:</strong> {os.getcwd()}</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=fallback_html, media_type="text/html")
+        
+    except Exception as e:
+        print(f"Error serving frontend: {e}")
+        # Ultimate fallback: return JSON
+        return JSONResponse(content={
+            "message": "Sneaker Authentication API",
+            "version": "1.0.0",
+            "status": "running",
+            "error": "Frontend not available",
+            "endpoints": {
+                "health": "/api/health",
+                "predict": "/api/predict",
+                "docs": "/docs"
+            }
+        })
 
 @app.get("/api")
 async def api_info():
@@ -265,6 +380,11 @@ async def api_info():
     return {
         "name": "Sneaker Authentication API",
         "version": "1.0.0",
+        "status": "running",
+        "description": "AI-powered sneaker authenticity detection",
+        "memory_optimized": True,
+        "working_directory": os.getcwd(),
+        "timestamp": str(datetime.datetime.now()),
         "endpoints": {
             "health": "/api/health",
             "predict": "/api/predict",
@@ -353,30 +473,6 @@ async def health():
         "timestamp": str(datetime.datetime.now()),
         "memory_optimized": True
     }
-
-# Mount static files for frontend (only in production)
-try:
-    # Check multiple possible locations for frontend build
-    frontend_paths = [
-        "dist",           # Docker build location
-        "frontend/dist",  # Local development
-        "../frontend/dist" # Alternative location
-    ]
-    
-    frontend_mounted = False
-    for frontend_path in frontend_paths:
-        if os.path.exists(frontend_path):
-            app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
-            print(f"✅ Static files mounted successfully from: {frontend_path}")
-            frontend_mounted = True
-            break
-    
-    if not frontend_mounted:
-        print("⚠️ Frontend dist directory not found - API only mode")
-        print(f"📂 Available directories: {os.listdir('.')}")
-        
-except Exception as e:
-    print(f"⚠️ Could not mount static files: {e}")
 
 if __name__ == "__main__":
     import uvicorn
