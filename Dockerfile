@@ -4,9 +4,9 @@ FROM node:18-alpine AS frontend-build
 # Build frontend
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci --only=production
+RUN npm ci --verbose
 COPY frontend/ ./
-RUN npm run build
+RUN npm run build --verbose
 
 # Python backend stage
 FROM python:3.10-slim
