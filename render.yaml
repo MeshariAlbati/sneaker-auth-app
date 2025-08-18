@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: sneaker-auth-app
+    env: docker
+    dockerfilePath: ./Dockerfile
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 8000
