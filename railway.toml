@@ -1,9 +1,9 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "Dockerfile.simple"
 
 [deploy]
-startCommand = "python app.py"
+startCommand = "python3 app.py"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 600
 restartPolicyType = "always"
