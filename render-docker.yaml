@@ -1,9 +1,11 @@
+# Alternative Docker-based deployment for Render
+# Use this if you prefer Docker over Python native deployment
+
 services:
   - type: web
-    name: legitkicks-app
-    env: python
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && python app.py
+    name: legitkicks-app-docker
+    env: docker
+    dockerfilePath: ./Dockerfile
     scaling:
       minInstances: 1
       maxInstances: 1
@@ -26,7 +28,6 @@ services:
         value: "0"
     # Memory optimization settings
     plan: starter  # 512MB RAM, 0.5 CPU
-    # Alternative: plan: standard  # 1GB RAM, 1 CPU for better performance
     autoDeploy: true
     branch: main
     # Resource constraints

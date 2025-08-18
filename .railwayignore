@@ -1,0 +1,76 @@
+# Railway ignore file - exclude unnecessary files to reduce build size and memory usage
+
+# Development files
+*.log
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+README*
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Data files (if large)
+*.csv
+*.json
+*.xml
+*.zip
+*.tar.gz
+
+# Model files (if not needed for deployment)
+*.pth
+*.pt
+*.onnx
+*.h5
+
+# Frontend build artifacts (if not needed)
+frontend/dist/
+frontend/node_modules/
+
+# Docker files (not needed for Railway)
+docker-compose.yml
+.dockerignore
+
+# Local configuration
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp

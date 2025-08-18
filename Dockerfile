@@ -1,42 +1,45 @@
-# Multi-stage build for production
-FROM node:18-alpine AS frontend-build
+# Use Python 3.11 slim image for smaller size
+FROM python:3.11-slim
 
-# Build frontend
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci --verbose
-COPY frontend/ ./
-RUN npm run build --verbose
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
 
-# Python backend stage
-FROM python:3.10-slim
+# Set memory limits
+ENV PYTHONMALLOC=malloc
+ENV PYTHONDEVMODE=0
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Create app directory
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy requirements first for better caching
+COPY backend/requirements.txt .
 
-# Copy the model file from the repository (now handled by Git LFS)
-COPY sneaker_model_production.pth ./
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
-COPY backend/ ./backend/
+# Copy application code
+COPY backend/ .
 
-# Copy built frontend
-COPY --from=frontend-build /app/frontend/dist ./frontend/dist
-
-# Install additional dependencies for static file serving
-RUN pip install --no-cache-dir aiofiles
+# Create a non-root user
+RUN useradd --create-home --shell /bin/bash app && \
+    chown -R app:app /app
+USER app
 
 # Expose port
 EXPOSE 8000
 
-# Start the application
-CMD ["python", "backend/app.py"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/api/health')" || exit 1
+
+# Run the application with memory optimization
+CMD ["python", "-u", "app.py"]
