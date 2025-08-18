@@ -1,12 +1,13 @@
 services:
   - type: web
-    name: sneaker-auth-app
+    name: legitkicks-app
     env: docker
     dockerfilePath: ./Dockerfile
     scaling:
       minInstances: 1
       maxInstances: 1
     healthCheckPath: /api/health
+    healthCheckTimeout: 600
     envVars:
       - key: PORT
         value: 8000
