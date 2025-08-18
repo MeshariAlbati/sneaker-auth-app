@@ -94,8 +94,16 @@ class LightweightModelLoader:
         
     def check_model_file(self):
         """Check if model file exists"""
-        model_paths = ['sneaker_model_production.pth', '../sneaker_model_production.pth']
+        # Check multiple possible model file locations for Render deployment
+        model_paths = [
+            'sneaker_model_production.pth',  # Current directory
+            '../sneaker_model_production.pth',  # Parent directory
+            './sneaker_model_production.pth',  # Explicit current directory
+            '/app/sneaker_model_production.pth',  # Docker container path
+            '/app/backend/sneaker_model_production.pth'  # Backend subdirectory
+        ]
         
+        print(f"🔍 Checking for model file in: {os.getcwd()}")
         for model_path in model_paths:
             if os.path.exists(model_path):
                 print(f"✅ Model file found: {model_path}")
@@ -228,6 +236,45 @@ class LightweightModelLoader:
 # Initialize lightweight model loader
 model_loader = LightweightModelLoader()
 print("✅ Lightweight model loader initialized")
+
+@app.get("/")
+async def root():
+    """Root endpoint with API information"""
+    print(f"🌐 Root endpoint accessed - Working directory: {os.getcwd()}")
+    print(f"📂 Files in current directory: {os.listdir('.')}")
+    
+    return {
+        "message": "Sneaker Authentication API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "root": "/",
+            "health": "/api/health",
+            "predict": "/api/predict",
+            "docs": "/docs"
+        },
+        "description": "AI-powered sneaker authenticity detection",
+        "memory_optimized": True,
+        "working_directory": os.getcwd(),
+        "timestamp": str(datetime.datetime.now())
+    }
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint"""
+    return {
+        "name": "Sneaker Authentication API",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/api/health",
+            "predict": "/api/predict",
+            "documentation": "/docs"
+        },
+        "usage": {
+            "health_check": "GET /api/health",
+            "predict_sneaker": "POST /api/predict (with image file)"
+        }
+    }
 
 @app.post("/api/predict")
 async def predict(file: UploadFile = File(...)):
