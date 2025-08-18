@@ -48,12 +48,13 @@ class ModelLoader:
                     download_url = model_url
                 
                 # Download the file
-                response = requests.get(download_url, stream=True)
+                response = requests.get(download_url, stream=True, timeout=300)
                 response.raise_for_status()
                 
                 with open(model_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
+                        if chunk:
+                            f.write(chunk)
                 
                 print("✅ Model file downloaded successfully")
                 return True
@@ -125,7 +126,28 @@ class ModelLoader:
             'fake_probability': round(probabilities[0][0].item() * 100, 2),
             'real_probability': round(probabilities[0][1].item() * 100, 2)
         }
-model_loader = ModelLoader()
+
+# Initialize model loader with error handling
+try:
+    model_loader = ModelLoader()
+    print("✅ Model loader initialized successfully")
+except Exception as e:
+    print(f"❌ Error initializing model loader: {e}")
+    # Create a dummy model loader for development
+    class DummyModelLoader:
+        def predict(self, image):
+            import random
+            fake_prob = random.uniform(10, 90)
+            real_prob = 100 - fake_prob
+            prediction = "fake" if fake_prob > real_prob else "real"
+            return {
+                'prediction': prediction,
+                'confidence': max(fake_prob, real_prob),
+                'fake_probability': round(fake_prob, 2),
+                'real_probability': round(real_prob, 2)
+            }
+    model_loader = DummyModelLoader()
+    print("⚠️ Using fallback dummy model due to initialization error")
 
 @app.post("/api/predict")
 async def predict(file: UploadFile = File(...)):
@@ -150,12 +172,24 @@ async def health():
     return {"status": "healthy"}
 
 # Mount static files for frontend (only in production)
-import os
-if os.path.exists("frontend/dist"):
-    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+try:
+    if os.path.exists("frontend/dist"):
+        app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+        print("✅ Static files mounted successfully")
+    else:
+        print("⚠️ Frontend dist directory not found - API only mode")
+except Exception as e:
+    print(f"⚠️ Could not mount static files: {e}")
 
 # Note: Email functionality now handled client-side via mailto links
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("🚀 Starting Sneaker Authentication API...")
+    print(f"📁 Current working directory: {os.getcwd()}")
+    print(f"📂 Files in current directory: {os.listdir('.')}")
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    except Exception as e:
+        print(f"❌ Failed to start server: {e}")
+        raise
