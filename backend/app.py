@@ -85,11 +85,26 @@ class LightweightModelLoader:
             model_path = self.check_model_file()
             
             if model_path:
-                # Load with map_location to CPU to save GPU memory
-                # Use weights_only=False for compatibility with older model files
-                checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
-                model.load_state_dict(checkpoint['model_state_dict'])
-                print(f"✅ Loaded production model from: {model_path}")
+                print(f"🔍 Attempting to load model from: {model_path}")
+                try:
+                    # Load with map_location to CPU to save GPU memory
+                    # Use weights_only=False for compatibility with older model files
+                    checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
+                    print(f"✅ Checkpoint loaded successfully, keys: {list(checkpoint.keys())}")
+                    
+                    # Check if model_state_dict exists
+                    if 'model_state_dict' not in checkpoint:
+                        print(f"❌ Checkpoint missing 'model_state_dict', available keys: {list(checkpoint.keys())}")
+                        raise ValueError("Checkpoint missing model_state_dict")
+                    
+                    model.load_state_dict(checkpoint['model_state_dict'])
+                    print(f"✅ Model weights loaded successfully")
+                except Exception as load_error:
+                    print(f"❌ Failed to load model from checkpoint: {load_error}")
+                    print(f"❌ Error type: {type(load_error).__name__}")
+                    import traceback
+                    print(f"❌ Full traceback: {traceback.format_exc()}")
+                    raise load_error
             else:
                 print("⚠️ Using demo mode - model file not found")
             
@@ -135,10 +150,10 @@ class LightweightModelLoader:
             else:
                 print(f"🔍 Checking: {model_path} - not found")
         
-        # Try to download model if MODEL_DOWNLOAD_URL is set
+        # Only download if no model file exists anywhere
         model_url = os.getenv('MODEL_DOWNLOAD_URL')
         if model_url:
-            print(f"🌐 Attempting to download model from: {model_url}")
+            print(f"🌐 No model file found, downloading from: {model_url}")
             try:
                 downloaded_path = self.download_model(model_url)
                 if downloaded_path:
