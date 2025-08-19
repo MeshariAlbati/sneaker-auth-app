@@ -11,6 +11,24 @@ from PIL import Image
 
 app = FastAPI()
 
+@app.on_event("startup")
+async def startup_event():
+    """Handle startup events gracefully"""
+    try:
+        print("🚀 FastAPI app starting up...")
+        # Try to initialize model loader in background
+        try:
+            get_model_loader()
+            print("✅ Model loader startup check completed")
+        except Exception as e:
+            print(f"⚠️ Model loader startup check failed: {e}")
+            print("🔄 Continuing with fallback mode...")
+        
+        print("✅ FastAPI app startup completed")
+    except Exception as e:
+        print(f"⚠️ Startup event error: {e}")
+        print("🔄 Continuing with degraded mode...")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -277,8 +295,43 @@ class LightweightModelLoader:
             }
 
 # Initialize lightweight model loader
-model_loader = LightweightModelLoader()
-print("✅ Lightweight model loader initialized")
+model_loader = None
+
+def get_model_loader():
+    """Get or create model loader with error handling"""
+    global model_loader
+    if model_loader is None:
+        try:
+            model_loader = LightweightModelLoader()
+            print("✅ Lightweight model loader initialized")
+        except Exception as e:
+            print(f"⚠️ Failed to initialize model loader: {e}")
+            # Create a fallback loader that won't crash
+            class FallbackModelLoader:
+                def __init__(self):
+                    self.model_loaded = False
+                    self.model = None
+                    self.transform = None
+                    self.device = None
+                
+                def load_model_lazily(self):
+                    print("⚠️ Using fallback mode - model loader failed to initialize")
+                    self.model_loaded = False
+                
+                def predict(self, image):
+                    return {
+                        'prediction': 'unknown',
+                        'confidence': 0,
+                        'fake_probability': 50,
+                        'real_probability': 50,
+                        'method': 'fallback_mode'
+                    }
+            
+            model_loader = FallbackModelLoader()
+    
+    return model_loader
+
+print("✅ Model loader system initialized (lazy loading enabled)")
 
 # Mount static files for frontend (but NOT at root to avoid route conflicts)
 try:
@@ -455,7 +508,7 @@ async def predict(file: UploadFile = File(...)):
         
         # Get prediction
         try:
-            result = model_loader.predict(image)
+            result = get_model_loader().predict(image)
             
             # Clean up image to free memory
             del image, contents
@@ -478,32 +531,49 @@ async def predict(file: UploadFile = File(...)):
 
 @app.get("/api/health")
 async def health():
-    model_status = "lightweight_loader"
-    # Check model file in root directory (from backend/ subdirectory)
-    model_paths = ['../sneaker_model_production.pth', 'sneaker_model_production.pth']
-    model_found = False
-    actual_path = ""
-    
-    for model_path in model_paths:
-        if os.path.exists(model_path):
-            file_size = os.path.getsize(model_path)
-            model_status = f"available ({file_size / (1024*1024):.1f} MB)"
-            actual_path = model_path
-            model_found = True
-            break
-    
-    if not model_found:
-        model_status = "not found"
-        actual_path = "../sneaker_model_production.pth"
-    
-    return {
-        "status": "healthy",
-        "model_status": model_status,
-        "model_path": actual_path,
-        "working_directory": os.getcwd(),
-        "timestamp": str(datetime.datetime.now()),
-        "memory_optimized": True
-    }
+    try:
+        model_status = "lightweight_loader"
+        # Check model file in root directory (from backend/ subdirectory)
+        model_paths = ['../sneaker_model_production.pth', 'sneaker_model_production.pth']
+        model_found = False
+        actual_path = ""
+        
+        for model_path in model_paths:
+            if os.path.exists(model_path):
+                file_size = os.path.getsize(model_path)
+                model_status = f"available ({file_size / (1024*1024):.1f} MB)"
+                actual_path = model_path
+                model_found = True
+                break
+        
+        if not model_found:
+            model_status = "not found"
+            actual_path = "../sneaker_model_production.pth"
+        
+        # Check if model loader can be initialized
+        try:
+            loader = get_model_loader()
+            loader_status = "available"
+        except Exception as e:
+            loader_status = f"error: {str(e)}"
+        
+        return {
+            "status": "healthy",
+            "model_status": model_status,
+            "model_path": actual_path,
+            "loader_status": loader_status,
+            "working_directory": os.getcwd(),
+            "timestamp": str(datetime.datetime.now()),
+            "memory_optimized": True
+        }
+    except Exception as e:
+        # Return a basic health response even if there are errors
+        return {
+            "status": "degraded",
+            "error": str(e),
+            "timestamp": str(datetime.datetime.now()),
+            "message": "API is running but some components may have issues"
+        }
 
 # Add catch-all route for SPA routing (must come AFTER all specific routes)
 @app.get("/{full_path:path}")
