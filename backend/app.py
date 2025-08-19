@@ -65,7 +65,8 @@ class LightweightModelLoader:
             
             if model_path:
                 # Load with map_location to CPU to save GPU memory
-                checkpoint = torch.load(model_path, map_location='cpu')
+                # Use weights_only=False for compatibility with older model files
+                checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
                 model.load_state_dict(checkpoint['model_state_dict'])
                 print(f"✅ Loaded production model from: {model_path}")
             else:
@@ -91,9 +92,8 @@ class LightweightModelLoader:
             self.model = None
         
     def check_model_file(self):
-        """Check if model file exists"""
+        """Check if model file exists and download if needed"""
         # Check model file locations for Render deployment
-        # Model is stored in root directory, backend runs from backend/ subdirectory
         model_paths = [
             '../sneaker_model_production.pth',  # Root directory (from backend/)
             'sneaker_model_production.pth',    # Current directory (fallback)
@@ -107,8 +107,55 @@ class LightweightModelLoader:
             else:
                 print(f"🔍 Checking: {model_path} - not found")
         
+        # Try to download model if MODEL_DOWNLOAD_URL is set
+        model_url = os.getenv('MODEL_DOWNLOAD_URL')
+        if model_url:
+            print(f"🌐 Attempting to download model from: {model_url}")
+            try:
+                downloaded_path = self.download_model(model_url)
+                if downloaded_path:
+                    print(f"✅ Model downloaded successfully to: {downloaded_path}")
+                    return downloaded_path
+            except Exception as e:
+                print(f"❌ Failed to download model: {e}")
+        
         print("⚠️ Model file not found in any expected location")
         return None
+    
+    def download_model(self, model_url: str):
+        """Download model from URL"""
+        try:
+            import requests
+            
+            # Determine download path
+            download_path = 'sneaker_model_production.pth'
+            
+            print(f"📥 Downloading model from {model_url}...")
+            print(f"💾 Saving to: {download_path}")
+            
+            # Download with progress tracking
+            response = requests.get(model_url, stream=True)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            with open(download_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            progress = (downloaded / total_size) * 100
+                            if downloaded % (1024 * 1024) == 0:  # Print every MB
+                                print(f"📊 Download progress: {progress:.1f}% ({downloaded // (1024*1024)} MB)")
+            
+            print(f"✅ Model download completed: {downloaded // (1024*1024)} MB")
+            return download_path
+            
+        except Exception as e:
+            print(f"❌ Error downloading model: {e}")
+            return None
 
     def predict(self, image: Image.Image):
         """Make prediction with memory cleanup"""
