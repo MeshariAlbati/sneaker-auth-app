@@ -62,9 +62,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       );
 
       onPredictionComplete(response.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Prediction error:', err);
-      const errorMessage = err.response?.data?.error || 'Failed to analyze image. Please try again.';
+      const errorMessage = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to analyze image. Please try again.';
       setError(errorMessage);
       onReset();
     }

@@ -1,34 +1,16 @@
 services:
   - type: web
-    name: legitkicks-app
-    env: docker
-    dockerfilePath: ./Dockerfile
-    scaling:
-      minInstances: 1
-      maxInstances: 1
-    healthCheckPath: /api/health
-    healthCheckTimeout: 600
+    name: sneaker-auth-api
+    env: python
+    plan: starter
+    buildCommand: ./build.sh
+    startCommand: ./start.sh
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: PORT
         value: 8000
-      - key: PYTHON_VERSION
-        value: "3.11"
       - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: PYTHONDONTWRITEBYTECODE
-        value: "1"
-      - key: PYTHONMALLOC
-        value: "malloc"
-      - key: PYTHONDEVMODE
-        value: "0"
-      - key: PYTHONHASHSEED
-        value: "0"
-    # Memory optimization settings
-    plan: starter  # 512MB RAM, 0.5 CPU
-    # Alternative: plan: standard  # 1GB RAM, 1 CPU for better performance
+        value: 1
+    healthCheckPath: /api/health
     autoDeploy: true
-    branch: main
-    # Resource constraints
-    resources:
-      cpu: 0.5
-      memory: 512MB

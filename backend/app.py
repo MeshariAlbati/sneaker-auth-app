@@ -2,11 +2,9 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 import gc
 import os
 import io
-import base64
 import datetime
 import numpy as np
 from PIL import Image
@@ -94,13 +92,11 @@ class LightweightModelLoader:
         
     def check_model_file(self):
         """Check if model file exists"""
-        # Check multiple possible model file locations for Render deployment
+        # Check model file locations for Render deployment
+        # Model is stored in root directory, backend runs from backend/ subdirectory
         model_paths = [
-            'sneaker_model_production.pth',  # Current directory
-            '../sneaker_model_production.pth',  # Parent directory
-            './sneaker_model_production.pth',  # Explicit current directory
-            '/app/sneaker_model_production.pth',  # Docker container path
-            '/app/backend/sneaker_model_production.pth'  # Backend subdirectory
+            '../sneaker_model_production.pth',  # Root directory (from backend/)
+            'sneaker_model_production.pth',    # Current directory (fallback)
         ]
         
         print(f"🔍 Checking for model file in: {os.getcwd()}")
@@ -237,7 +233,7 @@ class LightweightModelLoader:
 model_loader = LightweightModelLoader()
 print("✅ Lightweight model loader initialized")
 
-# Mount static files for frontend FIRST (before defining routes)
+# Mount static files for frontend (but NOT at root to avoid route conflicts)
 try:
     # Check multiple possible locations for frontend build
     frontend_paths = [
@@ -249,8 +245,9 @@ try:
     frontend_mounted = False
     for frontend_path in frontend_paths:
         if os.path.exists(frontend_path):
-            app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
-            print(f"✅ Static files mounted successfully from: {frontend_path}")
+            # Mount static files at /static to avoid conflicts with API routes
+            app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+            print(f"✅ Static files mounted successfully from: {frontend_path} at /static")
             frontend_mounted = True
             break
     
@@ -261,34 +258,7 @@ try:
 except Exception as e:
     print(f"⚠️ Could not mount static files: {e}")
 
-# Add catch-all route for SPA routing (must come after static mounting)
-@app.get("/{full_path:path}")
-async def catch_all(full_path: str):
-    """Catch-all route for SPA routing - serves frontend for any non-API route"""
-    # Skip API routes
-    if full_path.startswith("api/"):
-        raise HTTPException(status_code=404, detail="API endpoint not found")
-    
-    # Skip static assets
-    if full_path.startswith("assets/") or full_path.endswith((".js", ".css", ".png", ".jpg", ".svg")):
-        raise HTTPException(status_code=404, detail="Static asset not found")
-    
-    # For all other routes, serve the frontend (SPA routing)
-    try:
-        frontend_paths = ["dist", "frontend/dist", "../frontend/dist"]
-        for frontend_path in frontend_paths:
-            index_path = os.path.join(frontend_path, "index.html")
-            if os.path.exists(index_path):
-                with open(index_path, 'r') as f:
-                    html_content = f.read()
-                return HTMLResponse(content=html_content, media_type="text/html")
-        
-        # Fallback
-        raise HTTPException(status_code=404, detail="Frontend not available")
-        
-    except Exception as e:
-        print(f"Error in catch-all route: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+# Note: Catch-all route moved to the END after all specific routes
 
 @app.get("/")
 async def root():
@@ -304,6 +274,9 @@ async def root():
             if os.path.exists(index_path):
                 with open(index_path, 'r') as f:
                     html_content = f.read()
+                # Update asset paths to use /static prefix
+                html_content = html_content.replace('src="/assets/', 'src="/static/assets/')
+                html_content = html_content.replace('href="/assets/', 'href="/static/assets/')
                 return HTMLResponse(content=html_content, media_type="text/html")
         
         # Fallback: return a simple HTML with API info if no frontend found
@@ -449,7 +422,8 @@ async def predict(file: UploadFile = File(...)):
 @app.get("/api/health")
 async def health():
     model_status = "lightweight_loader"
-    model_paths = ['sneaker_model_production.pth', '../sneaker_model_production.pth']
+    # Check model file in root directory (from backend/ subdirectory)
+    model_paths = ['../sneaker_model_production.pth', 'sneaker_model_production.pth']
     model_found = False
     actual_path = ""
     
@@ -463,7 +437,7 @@ async def health():
     
     if not model_found:
         model_status = "not found"
-        actual_path = "sneaker_model_production.pth"
+        actual_path = "../sneaker_model_production.pth"
     
     return {
         "status": "healthy",
@@ -473,6 +447,38 @@ async def health():
         "timestamp": str(datetime.datetime.now()),
         "memory_optimized": True
     }
+
+# Add catch-all route for SPA routing (must come AFTER all specific routes)
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    """Catch-all route for SPA routing - serves frontend for any non-API route"""
+    # Skip API routes
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+    
+    # Skip static assets
+    if full_path.startswith("assets/") or full_path.endswith((".js", ".css", ".png", ".jpg", ".svg")):
+        raise HTTPException(status_code=404, detail="Static asset not found")
+    
+    # For all other routes, serve the frontend (SPA routing)
+    try:
+        frontend_paths = ["dist", "frontend/dist", "../frontend/dist"]
+        for frontend_path in frontend_paths:
+            index_path = os.path.join(frontend_path, "index.html")
+            if os.path.exists(index_path):
+                with open(index_path, 'r') as f:
+                    html_content = f.read()
+                # Update asset paths to use /static prefix
+                html_content = html_content.replace('src="/assets/', 'src="/static/assets/')
+                html_content = html_content.replace('href="/assets/', 'href="/static/assets/')
+                return HTMLResponse(content=html_content, media_type="text/html")
+        
+        # Fallback
+        raise HTTPException(status_code=404, detail="Frontend not available")
+        
+    except Exception as e:
+        print(f"Error in catch-all route: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 if __name__ == "__main__":
     import uvicorn
