@@ -251,6 +251,16 @@ try:
             frontend_mounted = True
             break
     
+    # Also mount public assets for images and other public files
+    public_paths = ["../frontend/public", "frontend/public", "public"]
+    public_mounted = False
+    for public_path in public_paths:
+        if os.path.exists(public_path):
+            app.mount("/public", StaticFiles(directory=public_path), name="public")
+            print(f"✅ Public assets mounted successfully from: {public_path}")
+            public_mounted = True
+            break
+    
     if not frontend_mounted:
         print("⚠️ Frontend dist directory not found - API only mode")
         print(f"📂 Available directories: {os.listdir('.')}")
@@ -456,8 +466,8 @@ async def catch_all(full_path: str):
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
     
-    # Skip static assets
-    if full_path.startswith("assets/") or full_path.endswith((".js", ".css", ".png", ".jpg", ".svg")):
+    # Skip static assets (but allow public assets)
+    if full_path.startswith("assets/") or (full_path.endswith((".js", ".css", ".png", ".jpg", ".svg")) and not full_path.startswith("public/")):
         raise HTTPException(status_code=404, detail="Static asset not found")
     
     # For all other routes, serve the frontend (SPA routing)

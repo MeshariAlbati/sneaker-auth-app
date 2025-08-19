@@ -21,8 +21,8 @@ const Hero: React.FC = () => {
             className="text-center"
           >
             <div className="inline-flex items-center space-x-3 mb-6">
-              <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
-                <img src="/sneakers-icon.png" alt="LegitKicks" className="h-10 w-10" />
+              <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                <img src="/static/sneakers-icon.png" alt="LegitKicks" className="h-10 w-10" />
               </div>
               <h1 className="text-5xl md:text-7xl font-bold">LegitKicks</h1>
             </div>
