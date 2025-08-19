@@ -2,6 +2,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
 import gc
 import os
 import io
@@ -9,11 +10,9 @@ import datetime
 import numpy as np
 from PIL import Image
 
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
-    """Handle startup events gracefully"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events"""
     try:
         print("🚀 FastAPI app starting up...")
         # Try to initialize model loader in background
@@ -25,9 +24,13 @@ async def startup_event():
             print("🔄 Continuing with fallback mode...")
         
         print("✅ FastAPI app startup completed")
+        yield
     except Exception as e:
         print(f"⚠️ Startup event error: {e}")
         print("🔄 Continuing with degraded mode...")
+        yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -112,15 +115,22 @@ class LightweightModelLoader:
     def check_model_file(self):
         """Check if model file exists and download if needed"""
         # Check model file locations for Render deployment
+        # On Render, working directory is /app, so check multiple possible locations
+        current_dir = os.getcwd()
+        print(f"🔍 Current working directory: {current_dir}")
+        
         model_paths = [
-            '../sneaker_model_production.pth',  # Root directory (from backend/)
-            'sneaker_model_production.pth',    # Current directory (fallback)
+            'sneaker_model_production.pth',           # Current directory (/app)
+            '../sneaker_model_production.pth',        # Parent directory
+            '../../sneaker_model_production.pth',      # Grandparent directory
+            '/app/sneaker_model_production.pth',      # Absolute path on Render
         ]
         
-        print(f"🔍 Checking for model file in: {os.getcwd()}")
+        print(f"🔍 Checking for model file in: {current_dir}")
         for model_path in model_paths:
             if os.path.exists(model_path):
-                print(f"✅ Model file found: {model_path}")
+                file_size = os.path.getsize(model_path)
+                print(f"✅ Model file found: {model_path} ({file_size / (1024*1024):.1f} MB)")
                 return model_path
             else:
                 print(f"🔍 Checking: {model_path} - not found")
@@ -508,7 +518,9 @@ async def predict(file: UploadFile = File(...)):
         
         # Get prediction
         try:
+            print(f"🔍 Starting prediction for image: {file.filename}")
             result = get_model_loader().predict(image)
+            print(f"✅ Prediction successful: {result}")
             
             # Clean up image to free memory
             del image, contents
@@ -516,7 +528,10 @@ async def predict(file: UploadFile = File(...)):
             
             return JSONResponse(content=result)
         except Exception as pred_error:
-            print(f"Prediction error: {pred_error}")
+            print(f"❌ Prediction error: {pred_error}")
+            print(f"❌ Error type: {type(pred_error).__name__}")
+            import traceback
+            print(f"❌ Full traceback: {traceback.format_exc()}")
             return JSONResponse(
                 content={'error': f'Model prediction failed: {str(pred_error)}'},
                 status_code=500
